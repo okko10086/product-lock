@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""Generator CLI guard.
+
+The plugin can block itself but not someone calling the generator CLI directly.
+So the real CLI hides behind this wrapper: every credit-spending command must carry a
+single-use token, and a token can only be issued by the plugin's `run` after a human
+approved the plan.
+
+Usage (point XYQ_CLI at this wrapper instead of the real CLI):
+
+    export XYQ_CLI=/path/to/product-lock/tools/xyq
+    export XYQ_CLI_REAL=/path/to/the/real/generator/cli
+
+    $XYQ_CLI generate-video --model ... --image ... --prompt ...
+
+No token -> refused, exit code 9, nothing is spent.
+
+Adapting to another vendor: set XYQ_CLI_REAL and edit SPEND below.
+"""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+sys.path.insert(0, str(ROOT / "core"))
+import gate  # noqa: E402
+
+REAL_ENV = "XYQ_CLI_REAL"
+
+# Credit-spending subcommands: always require a token.
+# Change this set when wrapping a different generator CLI.
+SPEND = {
+    "generate-video", "generate-image", "erase-video-subtitle",
+    "video-super-resolution", "short-drama", "marketing", "canvas",
+}
+
+
+def real_cli() -> str:
+    cli = os.environ.get(REAL_ENV)
+    if not cli:
+        print(json.dumps({
+            "ok": False,
+            "error": "XYQ_CLI_REAL is not set",
+            "how": "export XYQ_CLI_REAL=/path/to/the/real/generator/cli",
+        }, ensure_ascii=False), file=sys.stderr)
+        raise SystemExit(9)
+    return cli
+
+
+def main() -> int:
+    argv = sys.argv[1:]
+    if not argv:
+        return subprocess.call([real_cli()])
+
+    cmd = argv[0]
+    if cmd not in SPEND:
+        os.execv(real_cli(), [real_cli(), *argv])
+        return 0
+
+    tok = os.environ.get("DSH_PLUGIN_TOKEN", "")
+    row = gate.consume_token(tok) if tok else None
+    if not row:
+        reason = "no token" if not tok else "token invalid, already used, or expired"
+        gate.audit("exec_refuse", reason=reason, cmd=cmd,
+                   model=_arg(argv, "--model"), args=" ".join(argv)[:300])
+        print(json.dumps({
+            "ok": False,
+            "error": "blocked: the plugin must come first",
+            "reason": reason,
+            "cmd": cmd,
+            "how": "plan -> human approve -> run; run issues the token itself",
+        }, ensure_ascii=False, indent=2), file=sys.stderr)
+        return 9
+
+    gate.audit("exec_authorized", cmd=cmd, token=row.get("token"),
+               plan=row.get("plan"), shot=row.get("shot"), model=_arg(argv, "--model"))
+    env = dict(os.environ)
+    env.pop("DSH_PLUGIN_TOKEN", None)   # 不把令牌递给下游
+    rc = subprocess.call([real_cli(), *argv], env=env)
+    gate.log_result("cli", rc == 0, cmd=cmd, rc=rc)
+    return rc
+
+
+def _arg(argv: list, name: str) -> str:
+    if name in argv:
+        i = argv.index(name)
+        if i + 1 < len(argv):
+            return argv[i + 1]
+    return ""
+
+
+if __name__ == "__main__":
+    sys.exit(main())

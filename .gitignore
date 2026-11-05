@@ -1,0 +1,24 @@
+# 运行产物
+logs/
+out/
+videos/
+*.jpg.tmp
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 本地配置与密钥（永远不要提交）
+.env
+.env.*
+*.key
+*.pem
+*secret*
+*credential*

@@ -1,0 +1,29 @@
+{
+  "source": "examples/product.png",
+  "size": [
+    1024,
+    1024
+  ],
+  "product_share": 0.2014,
+  "overall": {
+    "L_mean": 86.19,
+    "a_mean": 8.79,
+    "b_mean": 12.42,
+    "texture_energy": 1573.81,
+    "edge_density": 0.0195
+  },
+  "parts": {
+    "red_cord": {
+      "share": 0.0316,
+      "L": 37.36,
+      "a": 55.2,
+      "b": 34.59
+    },
+    "jade_part": {
+      "share": 0.0238,
+      "L": 71.63,
+      "a": 5.82,
+      "b": 54.23
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "card_id": "card_70486827",
+  "source_model": "examples/product.png",
+  "prompt": "commercial product photograph of true red braided cord and pale jade-green carved pendant, on pure white seamless background, soft studio softbox lighting from upper left, subtle contact shadow, shot on a full-frame camera with a 100mm macro lens at f/8, ISO 100, high resolution, true-to-life color, natural micro texture",
+  "negative": "deformed product, changed material, altered texture, color shift, plastic look, CGI, 3D render, over-sharpened, over-smooth, blown highlights, text, watermark",
+  "locked_parts": [
+    "red_cord",
+    "jade_part"
+  ],
+  "acceptance": {
+    "tol_eq": 12.0,
+    "tol_ok": 20.0,
+    "basis": "部件级 Lab 偏移；暂定值，待同源样本标定",
+    "parts": {
+      "red_cord": {
+        "L": 37.36,
+        "a": 55.2,
+        "b": 34.59,
+        "share": 0.0316
+      },
+      "jade_part": {
+        "L": 71.63,
+        "a": 5.82,
+        "b": 54.23,
+        "share": 0.0238
+      }
+    }
+  },
+  "degraded_fields": [
+    "reference_strength",
+    "seed",
+    "steps",
+    "cfg"
+  ]
+}

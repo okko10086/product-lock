@@ -386,193 +386,45 @@ def register_extra(sub):
 
 # ---------------- plan / run：剧本 -> 分镜方案 -> 确认 -> 执行 ----------------
 
-# 运镜词库（团队内部整理）
-# safe=True 表示产品不变形；False 进禁用表，方案里不会出现
-# 词库 · 运镜（24 种）
-# safe=True 不改产品几何；False 需重绘透视或换视角，产品会变形
+# ---------------- 内置词库（最小可用默认集） ----------------
+# 完整词库放在 lexicon/lexicon.json，启动时覆盖这里。
+# 这里只留几条通用运镜，保证没有 lexicon 文件时 plan 也能跑。
+# 说明文字为项目自带，可整体替换。
 CAMERA_LIB = {
-    # ---- 一、相机运动 ----
-    "横摇": {"en": "Pan", "safe": True, "how": "相机原地向左或向右转动",
-             "param": "小角度 ≤15°，速度 ≤20 px/s", "risk": "角度大会带出画"},
-    "俯仰": {"en": "Tilt", "safe": True, "how": "相机原地向上或向下摇动",
-             "param": "小角度 ≤10°", "risk": "大角度改变透视"},
-    "推近": {"en": "Dolly in", "safe": True, "how": "相机向主体靠近",
-             "param": "3-5s 推 8-12%，≤20 px/s", "risk": "推太多边缘出画"},
-    "变焦推近": {"en": "Zoom in", "safe": True, "how": "机位不动，用变焦放大主体",
-                "param": "1.2-1.8s 走完", "risk": "几乎无，透视不变"},
-    "跟拍": {"en": "Tracking shot", "safe": False, "how": "相机与移动主体同步行进",
-             "param": "—", "risk": "产品需整体移动，单图无法稳定跟随"},
-    "环绕": {"en": "Orbit (Arc shot)", "safe": False, "how": "相机绕主体做弧线运动",
-             "param": "—", "risk": "需多角度素材，单视角硬转=贴片挤扁"},
-    "摇臂上升": {"en": "Crane up", "safe": False, "how": "相机向上升高，展开空间",
-              "param": "小角度 ≤5% 可放行", "risk": "大角度改变透视，产品变形"},
-    "推轨变焦": {"en": "Dolly zoom (Vertigo)", "safe": False, "how": "主体大小近似不变，背景透视变化",
-              "param": "—", "risk": "背景重绘，图生视频必变形"},
-
-    # ---- 二、焦点与时间 ----
-    "拉焦": {"en": "Rack focus", "safe": True, "how": "在前景与后景之间切换焦点",
-             "param": "1.2-1.8s 走完", "risk": "无，形状不变"},
-    "手持": {"en": "Handheld", "safe": True, "how": "用细微晃动营造现场感",
-             "param": "幅度 ≤2% 画面", "risk": "晃动大会让产品边缘抖"},
-    "第一人称穿越": {"en": "FPV drone shot", "safe": False, "how": "模拟穿越机高速飞行的视角",
-                "param": "—", "risk": "透视大改，产品跟着改形"},
-    "荷兰角": {"en": "Dutch angle", "safe": True, "how": "倾斜画面，制造不安与张力",
-              "param": "≤8°", "risk": "画面歪，但产品形状不变"},
-    "慢动作": {"en": "Slow motion", "safe": True, "how": "放慢动作，突出过程与细节",
-              "param": "0.25x-0.5x", "risk": "无"},
-    "速度渐变": {"en": "Speed ramp", "safe": True, "how": "在正常、快放与慢放间变速",
-               "param": "单段变速 ≤2 次", "risk": "无"},
-    "延时摄影": {"en": "Time-lapse", "safe": True, "how": "加快时间，呈现缓慢变化",
-              "param": "—", "risk": "无"},
-    "定格": {"en": "Freeze frame", "safe": True, "how": "暂时停住画面，强调瞬间",
-             "param": "0.5-1s", "risk": "无"},
-
-    # ---- 三、剪辑与转场（不改画面几何）----
-    "跳切": {"en": "Jump cut", "safe": True, "how": "相似机位中跳过一段时间",
-             "param": "—", "risk": "无"},
-    "匹配剪辑": {"en": "Match cut", "safe": True, "how": "利用相似形状或动作衔接场景",
-              "param": "—", "risk": "无"},
-    "甩镜转场": {"en": "Whip pan", "safe": False, "how": "快速横摇，借运动模糊衔接",
-              "param": "2-3 帧", "risk": "动作段速度超稳态线，产品易糊"},
-    "叠化": {"en": "Cross dissolve", "safe": True, "how": "前后画面重叠并逐渐过渡",
-             "param": "0.5-1s", "risk": "无"},
-    "划像转场": {"en": "Wipe", "safe": True, "how": "边界扫过，逐步换成下一画面",
-              "param": "0.5-1s", "risk": "无"},
-    "突变剪辑": {"en": "Smash cut", "safe": True, "how": "突然切换，制造强烈反差",
-              "param": "—", "risk": "无"},
-    "声音先入": {"en": "J-cut", "safe": True, "how": "下一场的声音先于画面出现",
-              "param": "—", "risk": "无（音频层）"},
-    "声音延续": {"en": "L-cut", "safe": True, "how": "上一场的声音延续到下一画面",
-              "param": "—", "risk": "无（音频层）"},
+    "推近": {"en": "Dolly in", "safe": True, "how": "机身沿光轴向前移动靠近主体",
+             "param": "3-5 秒推进 8-12%", "risk": "推过量主体边缘出画"},
+    "拉远": {"en": "Dolly out", "safe": True, "how": "机身沿光轴后退",
+             "param": "4-6 秒后退 10-15%", "risk": "退太多露出布景边缘"},
+    "横摇": {"en": "Pan", "safe": True, "how": "机位不动，机身绕竖轴左右转",
+             "param": "单次 ≤15°，起停各留 0.3 秒", "risk": "角度大就带出画"},
+    "俯仰": {"en": "Tilt", "safe": True, "how": "机位不动，镜头上下点头",
+             "param": "单次 ≤10°", "risk": "俯仰过大等于换机位"},
+    "变焦推近": {"en": "Zoom in", "safe": True, "how": "机位不动，焦距变长放大主体",
+                 "param": "1.2-1.8 秒走完", "risk": "几乎无几何风险"},
+    "横移": {"en": "Truck", "safe": True, "how": "机身平行于主体横向平移",
+             "param": "速度 ≤15 px/s", "risk": "行程过长露出边界"},
+    "拉焦": {"en": "Rack focus", "safe": True, "how": "机位焦距不动，改焦点位置",
+             "param": "0.8-1.5 秒完成", "risk": "景深太浅两个都虚"},
+    "定格": {"en": "Freeze frame", "safe": True, "how": "画面在某一帧停住",
+             "param": "停留 1-2 秒", "risk": "长停像卡了"},
+    "环绕": {"en": "Orbit", "safe": False, "how": "机身绕主体画弧",
+             "param": "—", "risk": "每个角度都是新产品面，单图做不出来"},
+    "跟拍": {"en": "Tracking shot", "safe": False, "how": "机身跟主体同步移动",
+             "param": "—", "risk": "主体要整体移动，单图做不出"},
+    "推轨变焦": {"en": "Dolly zoom", "safe": False, "how": "后退同时拉长焦距",
+                 "param": "—", "risk": "透视持续变化，产品比例会漂"},
+    "第一人称穿越": {"en": "FPV fly-through", "safe": False, "how": "镜头穿过场景接近主体",
+                     "param": "—", "risk": "途中一直是新角度"},
+    "甩镜": {"en": "Whip pan", "safe": False, "how": "极快甩一下靠模糊转场",
+             "param": "—", "risk": "整帧在动，无可用帧"},
 }
-
-# 提示词公式（词库原话）：镜头名称 + 时长 + 速度 + 主体/方向
-CAMERA_PROMPT_FORMULA = "镜头名称 + 时长 + 速度 + 主体/方向"
-CAMERA_PROMPT_EXAMPLE = "3秒 Dolly in，缓慢推近人物面部，保持视线水平。"
-
-
-# ========== 词库完整运镜库（第二版，来源逐条标注）==========
-
-# 词库 · 镜头语言 1/4 基础运动
-SHOT_LANG_BASIC = {
-    "横摇":       {"en": "Pan",        "how": "原地向左右转动"},
-    "俯仰":       {"en": "Tilt",       "how": "原地向上下抬落"},
-    "推近":       {"en": "Dolly in",   "how": "镜头向前靠近"},
-    "拉远":       {"en": "Dolly out",  "how": "镜头向后退开"},
-    "横移":       {"en": "Truck",      "how": "镜头向侧面平移"},
-    "升降":       {"en": "Pedestal",   "how": "朝向不变，垂直升降"},
-    "摇臂":       {"en": "Crane",      "how": "借摇臂升高并向下看"},
-    "环绕":       {"en": "Orbit (Arc)","how": "绕主体画弧线移动"},
-    "滚转":       {"en": "Roll",       "how": "绕镜头轴心旋转"},
-}
-
-# 词库 · 镜头语言 2/4 特殊运动
-SHOT_LANG_SPECIAL = {
-    "变焦推近":   {"en": "Zoom in",    "how": "机位不变，增大焦距"},
-    "推轨变焦":   {"en": "Dolly zoom", "how": "后移并变焦推近，主体大小不变"},
-    "跟拍":       {"en": "Tracking",   "how": "从侧面跟随移动"},
-    "前引跟拍":   {"en": "Leading",    "how": "镜头在前方引导"},
-    "后跟拍":     {"en": "Follow",     "how": "从后方跟随"},
-    "甩镜":       {"en": "Whip pan",   "how": "瞬间快速横摇"},
-    "手持":       {"en": "Handheld",   "how": "手持拍摄的轻微晃动"},
-    "无人机":     {"en": "Drone",      "how": "升空并俯拍"},
-    "主观视角":   {"en": "POV",        "how": "以主体视角前进"},
-}
-
-# 词库 · 史诗运镜（5 种）
-EPIC_MOVES = {
-    "揭示升镜":   {"how": "镜头从主体升起，环境全貌压过来，一个动作给出敬畏", "safe": True},
-    "庄严缓推":   {"how": "极慢推向远处的主体，旅程读作命运", "safe": True},
-    "横移建立全景": {"how": "横向漂移，前中远景不同速，视差卖出尺度", "safe": True},
-    "低角度纪念碑式": {"how": "低角度仰视，让主体有历史分量", "safe": True},
-    "静守苍茫":   {"how": "锁定极远景，主体只占画面下方一小块", "safe": True},
-}
-
-# 词库 · 剧情镜头（20 组，每条含完整提示词）
-STORY_SHOTS = [
-    {"no": 1, "name": "背影跟进", "use": "夜巷入场 / 身份悬念",
-     "prompt": "6秒，单一连续镜头。镜头在青灰衣剑客身后约两米，以腰部高度平稳跟进。他走过雨后窄巷，始终位于画面中部；结尾停在亮着油灯的门前，轻侧头但不转身。巷道透视连贯，披风随步伐摆动。"},
-    {"no": 2, "name": "门框揭示", "use": "藏身现身 / 突然登场",
-     "prompt": "6秒，单一连续镜头。近处木门框遮住画面右侧，镜头缓慢向右平移，逐渐露出门后的绛红衣女子。她先垂眼，再抬头看向走廊尽头。门框随视差移出画面，人物站位不变，最后停在中景。"},
-    {"no": 3, "name": "低位抬升", "use": "强者登场 / 气场变化",
-     "prompt": "6秒，单一连续镜头。镜头从剑客靴边的低机位缓慢升至胸口高度，同时轻微向上仰拍。他站在雪山石阶顶端，衣摆被风吹动，始终不向镜头走近。结尾呈现上半身与身后的山脊，动作稳定。"},
-    {"no": 4, "name": "环境推进", "use": "陌生地界 / 主角入局",
-     "prompt": "6秒，单一连续镜头。从竹海中的石桥远景开始，镜头沿桥面轴线匀速向前推进，逐渐接近桥中央的绛红衣女子。她握着折扇望向雾里，结尾停在全身中景。桥栏、竹林和人物的空间关系保持一致。"},
-    {"no": 5, "name": "侧向并行", "use": "追逐 / 轻功奔跑",
-     "prompt": "6秒，单一连续镜头。镜头与青灰衣剑客保持侧向距离，沿竹林小路同步平移。他从左向右持续奔跑，始终留在画面中部；前景竹干快速掠过，远景移动较慢。结尾放慢脚步，移动方向不反转。"},
-    {"no": 6, "name": "贴地推近", "use": "拔剑起手 / 攻势预备",
-     "prompt": "6秒，单一连续镜头。镜头贴近石台地面缓慢前进，低角度拍摄剑客拔剑。先看见靴子与剑鞘，再随拔剑动作轻抬镜头，停在半身构图。剑刃与手的位置稳定，人物不扑向镜头，不出现血腥画面。"},
-    {"no": 7, "name": "前景带速度", "use": "交锋 / 擦身而过",
-     "prompt": "6秒，单一连续镜头。镜头固定在庭院侧方，青灰衣剑客与绛红衣女子从左右接近，格挡后错身分开。一柄剑短暂掠过近处前景，带出运动模糊，面部和另一人物仍清楚。两人不换位瞬移，结尾各自停步。"},
-    {"no": 8, "name": "退镜揭局", "use": "包围 / 攻守反转",
-     "prompt": "6秒，单一连续镜头。从剑客持剑的中景开始，镜头平稳后退，逐渐露出两侧廊柱后的对手。剑客原地缓缓转头，察觉包围；结尾停在能看清三人站位的全景。退镜不穿墙，人物数量与位置连续。"},
-]
-
-
-
-# 词库 · 镜头语言 3/4 景别与角度
-SHOT_LANG_FRAMING = {
-    "大远景":   {"en": "Extreme long shot", "how": "环境很大，主体很小"},
-    "全景":     {"en": "Full shot",         "how": "从头到脚完整入镜"},
-    "中景":     {"en": "Medium shot",       "how": "取到腰部以上"},
-    "特写":     {"en": "Close-up",          "how": "主体占满画面"},
-    "大特写":   {"en": "Extreme close-up",  "how": "只呈现局部细节"},
-    "高角度":   {"en": "High angle",        "how": "向下俯拍，主体显小"},
-    "低角度":   {"en": "Low angle",         "how": "向上仰拍，突出力量感"},
-    "鸟瞰":     {"en": "Bird's-eye",        "how": "正上方俯拍"},
-    "荷兰角":   {"en": "Dutch angle",       "how": "画面倾斜，营造紧张感"},
-}
-
-# 词库 · 镜头语言 4/4 构图与焦点
-SHOT_LANG_COMPOSITION = {
-    "越肩镜头": {"en": "Over-the-shoulder", "how": "从肩膀上方越过拍摄"},
-    "双人镜头": {"en": "Two shot",          "how": "两个主体同时入镜"},
-    "广角镜头": {"en": "Wide lens 12mm",    "how": "近距离拍摄，透视夸张"},
-    "长焦镜头": {"en": "Telephoto lens",    "how": "远处取景，背景显得压缩"},
-    "浅景深":   {"en": "Shallow focus",     "how": "背景虚化"},
-    "深焦":     {"en": "Deep focus",        "how": "前景与背景都清晰"},
-    "拉焦":     {"en": "Rack focus",        "how": "焦点从前景切到后景"},
-    "揭示镜头": {"en": "Reveal",            "how": "从遮挡物后方展示画面"},
-    "三分法构图": {"en": "Rule of thirds",  "how": "主体放在三分线交点"},
-}
-
-# 三者辨析：推近 / 变焦推近 / 推轨变焦
-CAMERA_DIFF = {
-    "推近 Dolly in": "机位向主体靠近，透视关系改变，能看到前后景视差",
-    "变焦推近 Zoom in": "机位不动，增大焦距收紧取景，透视基本不变",
-    "推轨变焦 Dolly zoom": "机位前后移动同时反向变焦，主体大小不变但背景透视拉伸",
-    "怎么选": "想改空间关系→推近；同机位收紧取景→变焦；要背景拉伸感→推轨变焦",
-}
-
-
-
-# 词库 · 剧情镜头（续：情绪/关系/衔接）
-STORY_SHOTS_MORE = [
-    {"no": 9, "name": "越肩缓推", "use": "质问 / 藏着话不说",
-     "prompt": "6秒，单一连续镜头。前景保留剑客虚化的肩部，镜头缓慢推向对面的绛红衣女子。她先直视他，随后轻抿唇、垂眼，结尾停在面部近景。镜头始终位于两人连线同一侧，前景肩部逐渐退出。"},
-    {"no": 10, "name": "绕到眼神", "use": "认出故人 / 情绪转折",
-     "prompt": "6秒，单一连续镜头。镜头从女子背后偏侧的位置开始，缓慢绕到她侧前方约四十五度。她始终望向同一个画外的人，眼睛渐亮，嘴角轻颤。结尾停在侧近景，不绕满一圈，不突然越过两人的关系轴线。"},
-    {"no": 11, "name": "停镜留反应", "use": "告别 / 强撑后的失落",
-     "prompt": "6秒，固定近景，不移动镜头。剑客看着画外的人，先缓缓点头，再挤出很浅的笑。对方离开后，他的视线停留，笑容逐渐消失，下颌轻绷。只保留轻微呼吸，无对白；不要用突然落泪替代表情变化。"},
-    {"no": 12, "name": "拉远留空", "use": "孤独 / 关系结束",
-     "prompt": "6秒，单一连续镜头。从女子握住折扇的半身中景开始，镜头缓慢后退，逐渐露出空旷渡口。她始终站在原地，缓缓放下手；结尾人物变小，身旁留出明显空位。环境逐渐进入画面，不使用变焦跳变。"},
-    {"no": 13, "name": "前后景对峙", "use": "试探 / 谁先开口",
-     "prompt": "6秒，单一连续镜头。女子站在左侧近景，剑客站在右侧远景，中间隔着一段走廊。镜头缓慢侧移，两人始终看向彼此，距离不变。结尾用同一画面保留双方，让观众看清试探关系，不切成两个正脸特写。"},
-    {"no": 14, "name": "一步进入同框", "use": "安慰 / 决定靠近",
-     "prompt": "6秒，单一连续镜头。起始是女子站在窗边的中景，剑客从画面右侧走近一步。镜头轻微向左平移，为两人留出空间；结尾停在双人中景，他递出一件披风她抬眼回应。人物不突然贴近，手与披风完整可见。"},
-    {"no": 15, "name": "侧移揭示同行", "use": "误会化解 / 并肩同行",
-     "prompt": "6秒，单一连续镜头。从女子侧面的行走中景开始，镜头缓慢向外侧平移，逐渐露出与她同方向前行的剑客。两人步速一致，保持半步间距；结尾是并肩双人中景。镜头用侧移揭示关系，不让人物凭空出现。"},
-    {"no": 16, "name": "小弧线靠近", "use": "低声交谈 / 关系升温",
-     "prompt": "6秒，单一连续镜头。两人站在竹亭内，镜头围绕他们缓慢移动约三十度，同时轻微靠近。女子抬眼，剑客低头倾听；结尾停在双人近景，保留一臂以内的自然距离。背景有轻微视差，不旋转满圈、不突然亲吻。"},
-    {"no": 17, "name": "柱影遮挡接场", "use": "室外进室内 / 自然换景",
-     "prompt": "分两段生成，再剪辑衔接。前段：镜头向右跟随剑客走过廊柱，柱子完全遮满画面时结束。后段：从相同深色遮挡开始，继续向右移出，露出藏书厅里的他。两段移动方向、速度和人物服装一致，在全遮挡处切换。"},
-    {"no": 18, "name": "同向甩镜接场", "use": "追逐延续 / 节奏提速",
-     "prompt": "分两段生成，再剪辑衔接。前段：剑客向右奔跑，镜头向右快速横摇，以横向模糊结束。后段：从相似的右向模糊起始，镜头稳定后露出他继续奔跑。统一人物运动方向，在模糊最强处剪接；不要一次要求多个地点。"},
-    {"no": 19, "name": "相同动作接场", "use": "时间跳转 / 动作不断",
-     "prompt": "分两段生成，再做动作匹配剪辑。前段：女子在渡口收起折扇，扇骨合拢到一半时结束。后段：她在竹亭内，以相同手势和扇子位置继续合拢。两段机位、景别与手部方向接近，在同一动作阶段切换。"},
-    {"no": 20, "name": "同景光线过渡", "use": "时间流逝 / 氛围变化",
-     "prompt": "6秒，单一连续镜头。镜头固定在渡口的同一位置，人物静止望向河面，画面光线从暮色逐渐变为蓝色夜光。保持人物、船只和岸线位置稳定，只让灯笼缓缓亮起。表现时间过渡，不让建筑变形或人物消失。"},
-]
+SHOT_LANG_BASIC = {}
+SHOT_LANG_SPECIAL = {}
+SHOT_LANG_FRAMING = {}
+SHOT_LANG_COMPOSITION = {}
+EPIC_MOVES = {}
+STORY_SHOTS = []
+STORY_SHOTS_MORE = []
 
 
 # 高风险运镜：会改透视或需换视角，产品会变形，方案里一律不用
@@ -757,8 +609,8 @@ def cmd_run(plan_path: str, outdir: str, confirmed: bool = False, only_shot: int
     return res
 
 
-POSE_DEF = Path(__file__).resolve().parent.parent.parent / "姿态库" / "姿态定义.json"
-CAM_DEF = Path(__file__).resolve().parent.parent.parent / "姿态库" / "机位库_12.json"
+POSE_DEF = Path(__file__).resolve().parent.parent / "pose" / "poses.json"
+CAM_DEF = Path(__file__).resolve().parent.parent / "pose" / "cameras.json"
 
 
 def load_poses() -> list:
@@ -788,9 +640,10 @@ def cmd_pose(pid: str = "", blender: bool = False, cams: bool = False):
         if pid:
             shots = [x for x in shots if x["id"].upper() == pid.upper()]
         return {"count": len(shots), "source": str(CAM_DEF),
-                "shots": [{"id": x["id"], "名": x["名"], "lens": x["lens"],
-                           "az": x["azimuth"], "el": x["elevation"], "构图": x["framing"],
-                           "原话": x["原话"]} for x in shots]}
+                "shots": [{"id": x["id"], "name": x["name"], "label": x["label"],
+                           "focal": x["focal"], "azimuth": x["azimuth"],
+                           "elevation": x["elevation"], "framing": x["framing"],
+                           "desc": x.get("desc", "")} for x in shots]}
     poses = load_poses()
     if not poses:
         raise SystemExit(f"读不到姿态库: {POSE_DEF}")
@@ -799,13 +652,13 @@ def cmd_pose(pid: str = "", blender: bool = False, cams: bool = False):
         if not poses:
             raise SystemExit(f"没有这个姿态: {pid}")
     if blender:
-        return {"poses": [{"id": p["id"], "名": p["名"], "azimuth": p["azimuth"],
-                           "elevation": p["elevation"], "dist": p.get("fit_dist"),
-                           "fill": p.get("fit_fill", 0.82)} for p in poses]}
+        return {"poses": [{"id": p["id"], "name": p["name"], "label": p["label"],
+                           "azimuth": p["azimuth"], "elevation": p["elevation"],
+                           "dist": p["dist"], "fill": p.get("fill", 0.82)} for p in poses]}
     return {"count": len(poses), "source": str(POSE_DEF),
-            "poses": [{"id": p["id"], "名": p["名"], "az": p["azimuth"],
-                       "el": p["elevation"], "dist": p.get("fit_dist"), "用途": p.get("用途", "")}
-                      for p in poses]}
+            "poses": [{"id": p["id"], "name": p["name"], "label": p["label"],
+                       "azimuth": p["azimuth"], "elevation": p["elevation"],
+                       "dist": p.get("dist"), "use": p.get("use", "")} for p in poses]}
 
 
 def register_plan(sub):

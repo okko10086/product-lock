@@ -140,11 +140,13 @@ See `docs/lexicon-format.md` for the field layout.
 
 ## Camera-angle library
 
-`pose` exposes camera positions as data: azimuth, elevation, focal length, framing.
+`pose/poses.json` and `pose/cameras.json` hold camera positions as data: azimuth,
+elevation, focal length, framing. They are plain JSON — edit or replace them.
 
 ```bash
 python3 core/plugin.py pose           # 9 base poses, with fitted camera distance
 python3 core/plugin.py pose --cams    # 12 camera setups, with focal length
+python3 tools/build_pose.py           # regenerate the tables
 ```
 
 Use the table to drive Blender (or any renderer) so that a "45° view" means the same thing

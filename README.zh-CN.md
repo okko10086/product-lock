@@ -137,11 +137,13 @@ python3 core/plugin.py lexicon --category 运镜
 
 ## 机位库
 
-`pose` 把机位当数据处理：方位角、俯仰角、焦段、景别。
+`pose/poses.json` 和 `pose/cameras.json` 把机位当数据存着：方位角、俯仰角、焦段、景别。
+纯 JSON，直接改或整份替换都行。
 
 ```bash
 python3 core/plugin.py pose           # 9 个基础机位，带拟合出的相机距离
 python3 core/plugin.py pose --cams    # 12 个机位，带焦段
+python3 tools/build_pose.py           # 重新生成这两张表
 ```
 
 用这张表驱动 Blender（或任何渲染器），让"45° 视角"每次都指同一个东西，而不是每个提示词

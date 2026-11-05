@@ -4,7 +4,7 @@
 三层链路（对应"大模型控制小模型去控制视觉模型"）：
   大模型  —— 调用本插件，给目标描述，读验收结论（不碰参数细节）
   小模型  —— 本插件内的 DriftNet，负责建模/预测漂移/给修正方向
-  视觉模型 —— 按参数卡出图（Seedream / 小云雀），出完由本插件验收
+  生成器   —— 按参数卡出图，出完由本插件验收（通过通用 CLI 契约接入，不绑定厂商）
 
 子命令：
   build   产品图 -> 部件级产品模型 model.json
@@ -203,56 +203,71 @@ def verify(model: dict, gen_path: str, use_model: bool = False) -> dict:
 
 
 
-# ---------------- generate / poster：编排视觉模型 ----------------
+# ---------------- generate / poster：命令生成器 ----------------
+#
+# 生成器通过一个通用 CLI 约定接入（见 docs/adapter.md），本插件不认识任何具体厂商：
+#   <cli> video  --image PATH --prompt TEXT --duration SEC --ratio W:H --model NAME
+#   <cli> image  --image PATH --prompt TEXT --count N --ratio R --size S --model NAME
+#   <cli> fetch  --thread ID --run ID --outdir DIR
+#   <cli> balance
+# 前两条会花钱，必须过守门人（tools/guard）拿一次性令牌。
 
-def _xyq_call(card: dict, count: int = 2, model: str = "Seedream 5.0 Flash",
-              ratio: str = "6", resolution: str = "2K"):
-    """调用小云雀生图。返回提交信息；调用失败抛异常，不吞错。"""
+GUARD = Path(__file__).resolve().parent.parent / "tools" / "guard"
+GENERATOR_ENV = "GENERATOR_CLI"
+
+
+def _guard_cli() -> str:
+    """拿生成器 CLI 路径，并确认它指向守门人；指向真 CLI 就直接拒。
+
+    插件内部拦得住自己，拦不住直接调 CLI 出片，所以生成入口必须是守门人。
+    """
+    import os
+    cli = os.environ.get(GENERATOR_ENV) or str(GUARD)
+    if Path(cli).name != GUARD.name:
+        gate.audit("exec_refuse", reason=f"{GENERATOR_ENV} 未指向守门人", cli=cli)
+        raise SystemExit(
+            f"闸门拒绝：{GENERATOR_ENV} 指向的是真 CLI，能绕过插件直接出片。\n"
+            f"改成守门人再用：export {GENERATOR_ENV}={GUARD}"
+        )
+    return cli
+
+
+def _gen_submit(verb: str, args: dict, token: str = "") -> dict:
+    """调生成器提交任务，返回解析后的 JSON。失败直接抛，不吞。"""
     import os, subprocess, json as _json
     cli = _guard_cli()
-    cmd = [cli, "generate-image", "--prompt", card["prompt"], "--model", model,
-           "--image", card["source_model"], "--ratio", ratio, "--resolution", resolution,
-           "--generate-image-count", str(count), "--source", "dsh"]
+    cmd = [cli, verb]
+    for k, v in args.items():
+        if v in (None, ""):
+            continue
+        cmd += [f"--{k}", str(v)]
     env = dict(os.environ)
-    env["DSH_PLUGIN_TOKEN"] = gate.issue_token_for_image(card, model, count)
+    if token:
+        env["PLUGIN_TOKEN"] = token
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env)
     if r.returncode != 0:
         raise SystemExit(f"提交失败: {(r.stderr or r.stdout)[-400:]}")
     return _json.loads((r.stdout or "").strip().splitlines()[-1])
 
 
-def _xyq_fetch(thread: str, run: str, outdir: str, cli: str, timeout_s: int = 600):
-    """轮询并下载结果。"""
-    import subprocess, time
+def _gen_fetch(thread: str, run: str, outdir: str, timeout_s: int = 600, poll_s: int = 10):
+    """轮询并下载结果。适配器在完成时打印 {"completed": true}。"""
+    import json as _json, subprocess, time
+    cli = _guard_cli()
     Path(outdir).mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     while time.time() - t0 < timeout_s:
-        r = subprocess.run([cli, "query-result", "--thread-id", thread, "--run-id", run,
-                            "--download-dir", outdir], capture_output=True, text=True)
+        r = subprocess.run([cli, "fetch", "--thread", thread, "--run", run, "--outdir", outdir],
+                           capture_output=True, text=True)
         out = r.stdout or ""
-        if '"completed": true' in out:
-            return sorted(str(x) for x in Path(outdir).glob("*.jpeg"))
-        time.sleep(10)
+        try:
+            done = _json.loads(out.strip().splitlines()[-1]).get("completed") is True
+        except Exception:
+            done = '"completed": true' in out or '"completed":true' in out
+        if done:
+            return sorted(str(x) for x in Path(outdir).iterdir() if x.is_file())
+        time.sleep(poll_s)
     raise SystemExit(f"轮询超时（{timeout_s}s）")
-
-
-GUARD = Path(__file__).resolve().parent.parent / "tools" / "xyq"
-
-
-def _guard_cli() -> str:
-    """拿 CLI 路径，并确认它指向守门人；指向真 CLI 就直接拒。
-
-    插件内部拦得住自己，拦不住直接调 CLI 出片，所以生成入口必须是守门人。
-    """
-    import os
-    cli = os.environ.get("XYQ_CLI") or str(GUARD)
-    if Path(cli).name != "xyq":
-        gate.audit("exec_refuse", reason="XYQ_CLI 未指向守门人", cli=cli)
-        raise SystemExit(
-            "闸门拒绝：XYQ_CLI 指向的是真 CLI，能绕过插件直接出片。\n"
-            f"改成守门人再用：export XYQ_CLI={GUARD}"
-        )
-    return cli
 
 
 def cmd_generate(model_path: str, count: int, outdir: str):
@@ -260,11 +275,13 @@ def cmd_generate(model_path: str, count: int, outdir: str):
     m = json.loads(Path(model_path).read_text(encoding="utf-8"))
     card = make_card(m)
     gate.log_submit("image", model=model_path, count=count, prompt=card.get("prompt", "")[:120])
-    info = _xyq_call(card, count=count)
+    token = gate.issue_token_for_image(card, "default", count)
+    info = _gen_submit("image", {
+        "image": card["source_model"], "prompt": card["prompt"],
+        "count": count, "ratio": "3:4", "size": "2K", "model": "default",
+    }, token=token)
     gate.log_result("image", True, thread_id=info.get("thread_id"), run_id=info.get("run_id"), count=count)
-    import os
-    import os as _os
-    files = _xyq_fetch(info["thread_id"], info["run_id"], outdir, _os.environ.get("XYQ_CLI") or str(GUARD))
+    files = _gen_fetch(info["thread_id"], info["run_id"], outdir)
     reports = []
     for f in files:
         rep = verify(m, f)
@@ -574,7 +591,7 @@ def cmd_run(plan_path: str, outdir: str, confirmed: bool = False, only_shot: int
                    credits=plan.get("total_credits_estimate"))
         raise SystemExit("方案未确认：加 --confirm 表示已人工确认，才会消耗积分")
     gate.require_approved(plan, plan_path)
-    cli = _guard_cli()
+    _guard_cli()
     Path(outdir).mkdir(parents=True, exist_ok=True)
     done = []
     for s in plan["shots"]:
@@ -588,16 +605,16 @@ def cmd_run(plan_path: str, outdir: str, confirmed: bool = False, only_shot: int
                         model=s["recommended_model"], credits=s["credit_estimate"])
         # 签发一次性令牌：只有确认过的方案才签得出来，守门人只认这个令牌
         token = gate.issue_token(plan_path, s["shot_id"], s["recommended_model"], s["credit_estimate"])
-        cmd = [cli, "generate-video", "--model", s["recommended_model"],
-               "--image", first_img, "--prompt", s["camera_instruction"] + "，" + s["last_frame_prompt"],
-               "--ratio", s["ratio"], "--duration", str(s["duration_s"]), "--source", "dsh"]
-        env = dict(os.environ); env["DSH_PLUGIN_TOKEN"] = token
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env)
-        if r.returncode != 0:
-            done.append({"shot": s["shot_id"], "ok": False, "error": (r.stderr or r.stdout)[-300:]})
-            gate.log_result("video", False, shot=s["shot_id"], error=(r.stderr or r.stdout)[-200:])
+        try:
+            info = _gen_submit("video", {
+                "model": s["recommended_model"], "image": first_img,
+                "prompt": s["camera_instruction"] + "，" + s["last_frame_prompt"],
+                "ratio": s["ratio"], "duration": s["duration_s"],
+            }, token=token)
+        except SystemExit as e:
+            done.append({"shot": s["shot_id"], "ok": False, "error": str(e)[:300]})
+            gate.log_result("video", False, shot=s["shot_id"], error=str(e)[:200])
             continue
-        info = json.loads((r.stdout or "").strip().splitlines()[-1])
         done.append({"shot": s["shot_id"], "ok": True, "thread_id": info["thread_id"],
                      "run_id": info["run_id"], "credits": s["credit_estimate"]})
         gate.log_result("video", True, shot=s["shot_id"], thread_id=info["thread_id"],

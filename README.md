@@ -58,10 +58,11 @@ python3 core/plugin.py poster --model out/model.json --out poster.jpg \
         --title "一抹朱红" --subtitle "守一份东方雅意"
 ```
 
-Generation path needs a generator CLI wired through the guard (see below):
+product-lock does not bind to any specific generation service. You plug your own CLI in
+through a small contract — see [docs/adapter.md](docs/adapter.md). Nothing to pay yet:
 
 ```bash
-export XYQ_CLI="$PWD/tools/xyq"          # the guard, NOT the raw CLI
+export GENERATOR_CLI_REAL="$PWD/examples/mock_generator.sh"   # a fake generator for wiring
 python3 core/plugin.py plan    --model out/model.json --script "product hero shot" --budget 200 --out plan.json
 python3 core/plugin.py approve --plan plan.json --note "shot 2 shortened by 1s"
 python3 core/plugin.py run     --plan plan.json --outdir videos --confirm
@@ -78,21 +79,20 @@ the generator CLI directly. So the guard is enforced at the tool boundary, in th
 |---|---|---|
 | 1 | `run` without `--confirm` | plugin |
 | 2 | `run --confirm` on a plan that no human approved | plugin |
-| 3 | **any direct call to a credit-spending CLI command** | `tools/xyq` |
+| 3 | **any direct call to a credit-spending CLI verb** | `tools/guard` |
 
-`tools/xyq` wraps the real CLI. These commands require a **single-use token**:
+`tools/guard` wraps your CLI. These verbs require a **single-use token**:
 
 ```
-generate-video  generate-image  erase-video-subtitle
-video-super-resolution  short-drama  marketing  canvas
+video   image        # override with GUARD_SPEND_VERBS
 ```
 
 A token can only be issued by `run`, only for an approved plan. It is consumed once and
-expires in 15 minutes. If `XYQ_CLI` points at the raw CLI instead of the guard, the plugin
-refuses to run — otherwise layer 3 is decorative.
+expires in 15 minutes. If `GENERATOR_CLI` points at the raw CLI instead of the guard, the
+plugin refuses to run — otherwise layer 3 is decorative.
 
 ```bash
-$ tools/xyq generate-video --model ... --image ...
+$ tools/guard video --image ... --prompt ...
 {"ok": false, "error": "blocked: the plugin must come first", "reason": "no token"}
 # exit code 9
 ```

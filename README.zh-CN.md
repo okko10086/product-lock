@@ -55,12 +55,11 @@ python3 core/plugin.py poster --model out/model.json --out poster.jpg \
         --title "一抹朱红" --subtitle "守一份东方雅意"
 ```
 
-生成这条路要把生成器 CLI 接到守门人后面：
+product-lock 不绑定任何生成服务，写一个 CLI 接进来就行，约定见 [docs/adapter.md](docs/adapter.md)。
+先用自带的假生成器把链路跑通，不花一分钱：
 
 ```bash
-export XYQ_CLI="$PWD/tools/xyq"          # 守门人，不是真 CLI
-export XYQ_CLI_REAL=/path/to/real/cli    # 真 CLI 在这里
-
+export GENERATOR_CLI_REAL="$PWD/examples/mock_generator.sh"
 python3 core/plugin.py plan    --model out/model.json --script "产品主视觉" --budget 200 --out plan.json
 python3 core/plugin.py approve --plan plan.json --note "第 2 镜改短 1 秒"
 python3 core/plugin.py run     --plan plan.json --outdir videos --confirm
@@ -77,20 +76,19 @@ python3 core/plugin.py run     --plan plan.json --outdir videos --confirm
 |---|---|---|
 | 1 | `run` 不带 `--confirm` | 插件 |
 | 2 | `run --confirm` 但方案没人确认过 | 插件 |
-| 3 | **任何直接调花积分命令的调用** | `tools/xyq` |
+| 3 | **任何直接调花积分动词的调用** | `tools/guard` |
 
-`tools/xyq` 把真 CLI 包在里面。这些命令必须先拿到一枚**一次性令牌**：
+`tools/guard` 把你的 CLI 包在里面。这些动词必须先拿到一枚**一次性令牌**：
 
 ```
-generate-video  generate-image  erase-video-subtitle
-video-super-resolution  short-drama  marketing  canvas
+video   image        # 可用 GUARD_SPEND_VERBS 覆盖
 ```
 
 令牌只能由 `run` 为已确认的方案签发，用一次作废，15 分钟过期。
-`XYQ_CLI` 如果指向真 CLI 而不是守门人，插件直接拒绝执行——否则第三层就是摆设。
+`GENERATOR_CLI` 如果指向真 CLI 而不是守门人，插件直接拒绝执行——否则第三层就是摆设。
 
 ```bash
-$ tools/xyq generate-video --model ... --image ...
+$ tools/guard video --image ... --prompt ...
 {"ok": false, "error": "blocked: the plugin must come first", "reason": "no token"}
 # 退出码 9
 ```
